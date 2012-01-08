@@ -1,0 +1,25 @@
+room {
+  name house;
+  
+  desc "This is the house. It's where you live.";
+  exit north garden;
+  exit west park;
+  exit up zeppelin;
+}
+
+room {
+  name garden;
+  
+  desc "This is the garden, a gentle place.";
+  exit south house;
+}
+
+room {
+  name park;
+
+  desc "This is the park. People play here.";
+  exit east house;
+}
+
+room { name zeppelin; desc "Welcome aboard the airship!"; exit down park; }
+room { name hell; }
