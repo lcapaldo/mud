@@ -5,6 +5,7 @@ import Control.Concurrent.STM
 import Network
 import System.Environment ( getArgs )
 import Control.Monad ( liftM )
+import qualified Data.Map as M
 
 data Command = Say String | Travel Direction | Hear String deriving (Show, Read, Eq)
 
@@ -18,7 +19,8 @@ main :: IO ()
 main = do rs <- rooms
           case (roomsFromString rs) of
                Left e -> putStrLn e
-               Right (r, w) -> withSocketsDo $ server r w
+               Right w -> withSocketsDo $ xserver w
+          where xserver w = case M.lookup (RoomId 0) w of (Just r) -> server r w
 
 serverSocket :: IO Socket
 serverSocket = do (portNumArg:_) <- getArgs

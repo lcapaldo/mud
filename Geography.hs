@@ -1,5 +1,5 @@
 {-# OPTIONS -fglasgow-exts #-}
-module Geography (World, Room, go, description, roomsFromString, Direction ( .. ) ) where
+module Geography (World, Room, go, description, roomsFromString, Direction ( .. ), RoomId(..)) where
 import qualified Data.Map as M
 import Text.ParserCombinators.Parsec
 
@@ -166,14 +166,14 @@ parseRooms input = case (parse world "" input) of
                                                                  Description s -> normRoom (name, s, exits) ds
                                                                  Exit dir s -> normRoom (name, desc, (dir, s):exits) ds
 
-roomsFromString :: String -> Either String (Room a, World a)
+roomsFromString :: String -> Either String (World a)
 roomsFromString rs = case (parseRooms rs) of
                           Left e -> Left e
                           Right r -> let w = foldl go (M.empty) r
                                          go acc t = fromTriple acc table t
                                          table = M.fromList $ zip (map (\(s,_,_) -> s) r) [RoomId 0..]
                                          in case M.lookup (RoomId 0) w of
-                                                  Just r -> Right (r, w)
+                                                  Just _ -> Right w
                                                   Nothing -> Left "Empty world."
 
 
