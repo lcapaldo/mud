@@ -2,6 +2,7 @@ import Geography
 import System.IO
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Concurrent.Chan
 import Network
 import System.Environment ( getArgs )
 import Control.Monad ( liftM, mapM )
@@ -10,7 +11,7 @@ import Data.IORef
 
 data Command = Say String | Travel Direction | Hear String deriving (Show, Read, Eq)
 
-data Client = Client Int
+data Client = Client Int (Chan (Maybe Command))
 
 type Members = MVar [Client]
 
@@ -44,27 +45,50 @@ getClientLn = liftM chompCR . hGetLine
                       chompCR "" = ""
                       chompCR (a:as) = a:chompCR as 
 
-server :: Room a -> World a -> IO ()
+-- server :: Room a -> World a -> IO ()
 server r w = do sock <- serverSocket
+                counter <- newIORef 0
                 forever $ do (h,_,_) <- accept sock
-                             forkIO $ client (Client 0) h r w
+                             count <- readIORef counter
+                             chan <- newChan
+                             writeIORef counter (count + 1)
+                             forkIO $ client (Client count chan) h r w
 
 
 
-getCommand :: Handle -> IO (Maybe Command)
-getCommand h = getClientLn h >>= return . parseCommand
+getUserCommand :: Handle -> IO (Maybe Command)
+getUserCommand h = getClientLn h >>= return . parseCommand
 
-client :: Client -> Handle -> Room a -> World a -> IO ()
+pushUserCommands (Client _ c) h = forever $ do cmd <- getUserCommand h
+                                               writeChan c cmd
+
+
+getCommand c = readChan c
+
+
+enter c (Room _ _ Nothing)  = return ()
+enter (Client i _) (Room _ _ (Just v)) = do r <- takeMVar v
+                                            putMVar v (filter (\(Client j _) -> i /= j) r)
+
+leave c (Room _ _ Nothing)  = return ()
+leave c (Room _ _ (Just v)) = do r <- takeMVar v
+                                 putMVar v (c:r)
+ 
+
+client :: Client -> Handle -> Room (MVar [Client]) -> World (MVar [Client])  -> IO ()
 client c h r w = hSetBuffering h LineBuffering >> client' r
                  where client' r = do hPutStrLn h (description r)
-                                      cmd <- getCommand h
+                                      let (Client _ ch) = c
+                                      forkIO $ pushUserCommands c h
+                                      cmd <- getCommand ch
                                       case cmd of
                                            Just (Travel d) -> case go r d w of
-                                                         Just r' -> client' r'
-                                                         Nothing -> hPutStrLn h "Can't go that way" >> client' r  
+                                                                   Just r' -> leave c r >> enter c r' >> client' r'
+                                                                   Nothing -> hPutStrLn h "Can't go that way" >> client' r  
                                            Just (Say s) -> sendMessage s >> client' r
                                            Just (Hear s) -> hPutStrLn h s >> client' r
                                            Nothing -> hPutStrLn h "Invalid command." >> client' r
+
 
 sendMessage :: String -> IO ()
 sendMessage = const $ return ()
