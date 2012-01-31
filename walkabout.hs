@@ -6,7 +6,7 @@ import Network
 import System.Environment ( getArgs )
 import Control.Monad ( liftM )
 
-data Command = Say String | Travel Direction deriving (Show, Read, Eq)
+data Command = Say String | Travel Direction | Hear String deriving (Show, Read, Eq)
 
 forever :: IO a -> IO ()
 forever a = loop where loop = a >> loop
@@ -38,15 +38,19 @@ server r w = do sock <- serverSocket
 
 
 
+getCommand :: Handle -> IO (Maybe Command)
+getCommand h = getClientLn h >>= return . parseCommand
+
 client :: Handle -> Room -> World -> IO ()
 client h r w = hSetBuffering h LineBuffering >> client' r
                where client' r = do hPutStrLn h (description r)
-                                    clientIn <- getClientLn h
-                                    case parseCommand clientIn of
+                                    cmd <- getCommand h
+                                    case cmd of
                                          Just (Travel d) -> case go r d w of
                                                         Just r' -> client' r'
                                                         Nothing -> hPutStrLn h "Can't go that way" >> client' r  
                                          Just (Say s) -> sendMessage s >> client' r
+                                         Just (Hear s) -> hPutStrLn h s >> client' r
                                          Nothing -> hPutStrLn h "Invalid command." >> client' r
 
 sendMessage :: String -> IO ()
