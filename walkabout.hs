@@ -10,7 +10,9 @@ import Data.IORef
 
 data Command = Say String | Travel Direction | Hear String deriving (Show, Read, Eq)
 
-data Members = NoMembers
+data Client = Client Int
+
+type Members = MVar [Client]
 
 forever :: IO a -> IO ()
 forever a = loop where loop = a >> loop
@@ -27,7 +29,7 @@ main = do rs <- rooms
                                  (Just r) -> server r w
                 ioed w = do iolist <- (mapM g $ M.toList w)
                             return $ M.fromList iolist
-                g (k, v) = do r <- newIORef NoMembers
+                g (k, v) = do r <- newMVar []
                               return (k, v { extra = Just r })
                  
 
@@ -45,24 +47,24 @@ getClientLn = liftM chompCR . hGetLine
 server :: Room a -> World a -> IO ()
 server r w = do sock <- serverSocket
                 forever $ do (h,_,_) <- accept sock
-                             forkIO $ client h r w
+                             forkIO $ client (Client 0) h r w
 
 
 
 getCommand :: Handle -> IO (Maybe Command)
 getCommand h = getClientLn h >>= return . parseCommand
 
-client :: Handle -> Room a -> World a -> IO ()
-client h r w = hSetBuffering h LineBuffering >> client' r
-               where client' r = do hPutStrLn h (description r)
-                                    cmd <- getCommand h
-                                    case cmd of
-                                         Just (Travel d) -> case go r d w of
-                                                        Just r' -> client' r'
-                                                        Nothing -> hPutStrLn h "Can't go that way" >> client' r  
-                                         Just (Say s) -> sendMessage s >> client' r
-                                         Just (Hear s) -> hPutStrLn h s >> client' r
-                                         Nothing -> hPutStrLn h "Invalid command." >> client' r
+client :: Client -> Handle -> Room a -> World a -> IO ()
+client c h r w = hSetBuffering h LineBuffering >> client' r
+                 where client' r = do hPutStrLn h (description r)
+                                      cmd <- getCommand h
+                                      case cmd of
+                                           Just (Travel d) -> case go r d w of
+                                                         Just r' -> client' r'
+                                                         Nothing -> hPutStrLn h "Can't go that way" >> client' r  
+                                           Just (Say s) -> sendMessage s >> client' r
+                                           Just (Hear s) -> hPutStrLn h s >> client' r
+                                           Nothing -> hPutStrLn h "Invalid command." >> client' r
 
 sendMessage :: String -> IO ()
 sendMessage = const $ return ()
