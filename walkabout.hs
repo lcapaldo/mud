@@ -8,6 +8,7 @@ import System.Environment ( getArgs )
 import Control.Monad ( liftM, mapM )
 import qualified Data.Map as M
 import Data.IORef
+import Data.List
 
 data Command = Say String | Travel Direction | Hear String deriving (Show, Read, Eq)
 
@@ -66,32 +67,36 @@ pushUserCommands (Client _ c) h = forever $ do cmd <- getUserCommand h
 getCommand c = readChan c
 
 
-enter c (Room _ _ Nothing)  = return ()
-enter (Client i _) (Room _ _ (Just v)) = do r <- takeMVar v
+leave c (Room _ _ Nothing)  = return ()
+leave (Client i _) (Room _ _ (Just v)) = do r <- takeMVar v
                                             putMVar v (filter (\(Client j _) -> i /= j) r)
 
-leave c (Room _ _ Nothing)  = return ()
-leave c (Room _ _ (Just v)) = do r <- takeMVar v
-                                 putMVar v (c:r)
+enter c (Room _ _ Nothing)           = return ()
+enter c@(Client i _) (Room _ _ (Just v)) = do r <- takeMVar v
+                                              if any (\(Client j _) -> i == j) r
+                                                 then putMVar v r 
+                                                 else putMVar v (c:r)
  
 
 client :: Client -> Handle -> Room (MVar [Client]) -> World (MVar [Client])  -> IO ()
-client c h r w = hSetBuffering h LineBuffering >> client' r
+client c h r w = hSetBuffering h LineBuffering >> (forkIO $ pushUserCommands c h) >> client' r
                  where client' r = do hPutStrLn h (description r)
                                       let (Client _ ch) = c
-                                      forkIO $ pushUserCommands c h
+                                      enter c r
                                       cmd <- getCommand ch
                                       case cmd of
                                            Just (Travel d) -> case go r d w of
-                                                                   Just r' -> leave c r >> enter c r' >> client' r'
+                                                                   Just r' -> leave c r >> client' r'
                                                                    Nothing -> hPutStrLn h "Can't go that way" >> client' r  
-                                           Just (Say s) -> sendMessage s >> client' r
+                                           Just (Say s) -> sendMessage s r >> client' r
                                            Just (Hear s) -> hPutStrLn h s >> client' r
                                            Nothing -> hPutStrLn h "Invalid command." >> client' r
 
 
-sendMessage :: String -> IO ()
-sendMessage = const $ return ()
+sendMessage msg (Room _ _ Nothing)        = return ()
+sendMessage msg (Room _ _ (Just people))  = do ps <- takeMVar people
+                                               mapM_ (\(Client _ c) -> writeChan c (Just (Hear msg))) ps
+                                               putMVar people ps
 
 parseCommand :: String -> Maybe Command
 parseCommand "n" = Just $ Travel North
