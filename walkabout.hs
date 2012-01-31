@@ -31,7 +31,7 @@ getClientLn = liftM chompCR . hGetLine
                       chompCR "" = ""
                       chompCR (a:as) = a:chompCR as 
 
-server :: Room -> World -> IO ()
+server :: Room a -> World a -> IO ()
 server r w = do sock <- serverSocket
                 forever $ do (h,_,_) <- accept sock
                              forkIO $ client h r w
@@ -41,7 +41,7 @@ server r w = do sock <- serverSocket
 getCommand :: Handle -> IO (Maybe Command)
 getCommand h = getClientLn h >>= return . parseCommand
 
-client :: Handle -> Room -> World -> IO ()
+client :: Handle -> Room a -> World a -> IO ()
 client h r w = hSetBuffering h LineBuffering >> client' r
                where client' r = do hPutStrLn h (description r)
                                     cmd <- getCommand h

@@ -8,12 +8,13 @@ data Direction = North | South | West | East | NorthWest | SouthWest | NorthEast
 
 newtype RoomId = RoomId Int deriving (Eq, Ord, Enum, Read, Show)
 
-data Room = Room { exits :: M.Map Direction RoomId, description :: String } deriving (Eq, Show, Read)
+data Room a = Room { exits :: M.Map Direction RoomId, description :: String, extra :: Maybe a }
 
-type World = M.Map RoomId Room
 
-emptyRoom :: String -> Room
-emptyRoom = Room M.empty
+type World a = M.Map RoomId (Room a)
+
+emptyRoom :: String -> Room a
+emptyRoom = flip (Room M.empty) Nothing
 
 
 oppositeDir :: Direction -> Direction
@@ -30,16 +31,16 @@ oppositeDir d = case d of
                   Down -> Up
 
 
-go :: Room -> Direction -> World -> Maybe Room
+go :: Room a -> Direction -> World a -> Maybe (Room a)
 go r d w = do a <- M.lookup d (exits r)
               b <- M.lookup a w
               return b
 
  
-fromTriple :: World -> M.Map String RoomId -> (String,String,[(Direction,String)]) -> World
+fromTriple :: World a -> M.Map String RoomId -> (String,String,[(Direction,String)]) -> World a
 fromTriple w m (name,desc,exits) = case M.lookup name m of
                                      Nothing -> w
-                                     Just i -> M.insert i (Room buildExits desc) w
+                                     Just i -> M.insert i (Room buildExits desc Nothing) w
                                  where buildExits = foldl build (M.empty) exits
                                        build acc (dir, k) = case M.lookup k m of
                                                               Nothing -> acc
@@ -165,7 +166,7 @@ parseRooms input = case (parse world "" input) of
                                                                  Description s -> normRoom (name, s, exits) ds
                                                                  Exit dir s -> normRoom (name, desc, (dir, s):exits) ds
 
-roomsFromString :: String -> Either String (Room, World)
+roomsFromString :: String -> Either String (Room a, World a)
 roomsFromString rs = case (parseRooms rs) of
                           Left e -> Left e
                           Right r -> let w = foldl go (M.empty) r
