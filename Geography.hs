@@ -1,5 +1,5 @@
 {-# OPTIONS -fglasgow-exts #-}
-module Geography (World, Room, go, description, roomsFromString, Direction ( .. ), RoomId(..)) where
+module Geography (World, Room(..), go, roomsFromString, Direction ( .. ), RoomId(..)) where
 import qualified Data.Map as M
 import Text.ParserCombinators.Parsec
 

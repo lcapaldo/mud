@@ -4,10 +4,13 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import Network
 import System.Environment ( getArgs )
-import Control.Monad ( liftM )
+import Control.Monad ( liftM, mapM )
 import qualified Data.Map as M
+import Data.IORef
 
 data Command = Say String | Travel Direction | Hear String deriving (Show, Read, Eq)
+
+data Members = NoMembers
 
 forever :: IO a -> IO ()
 forever a = loop where loop = a >> loop
@@ -19,8 +22,14 @@ main :: IO ()
 main = do rs <- rooms
           case (roomsFromString rs) of
                Left e -> putStrLn e
-               Right w -> withSocketsDo $ xserver w
-          where xserver w = case M.lookup (RoomId 0) w of (Just r) -> server r w
+               Right w -> withSocketsDo $ do { w' <- ioed w; xserver w' } 
+          where xserver w = case M.lookup (RoomId 0) w of 
+                                 (Just r) -> server r w
+                ioed w = do iolist <- (mapM g $ M.toList w)
+                            return $ M.fromList iolist
+                g (k, v) = do r <- newIORef NoMembers
+                              return (k, v { extra = Just r })
+                 
 
 serverSocket :: IO Socket
 serverSocket = do (portNumArg:_) <- getArgs
